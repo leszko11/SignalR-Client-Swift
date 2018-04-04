@@ -9,6 +9,14 @@
 import Foundation
 import SocketRocket
 
+public enum TransportType: String {
+    case auto = "Auto"
+    case webSockets = "WebSockets"
+    case foreverFrame = "ForeverFrame"
+    case serverSentEvents = "ServerSentEvents"
+    case longPolling = "LongPolling"
+}
+
 public class WebsocketsTransport: NSObject, Transport, SRWebSocketDelegate {
     var webSocket: SRWebSocket? = nil
     public weak var delegate: TransportDelegate! = nil

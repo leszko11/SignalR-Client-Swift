@@ -67,10 +67,19 @@ public class Connection: SocketConnection {
                     return
                 }
 
-                // TODO: parse negotiate response to get connection id and transports
-                // let contents = String(data: (httpResponse!.contents)!, encoding: String.Encoding.utf8) ?? ""
-                let connectionId = ""
+                var connectionId = ""
+                var availableTransports: [TransportType] = []
+                
+                if let contents = try! JSONSerialization.jsonObject(with: (httpResponse!.contents)!) as? [String:Any] {
+                    connectionId = contents["connectionId"] as? String ?? ""
+                    
+                    if let transportTypes = contents["availableTransports"] as? [String]  {
+                        availableTransports = transportTypes.flatMap{ TransportType(rawValue: $0) }
+                    }
+                }
 
+                // TODO: Expose preffered Transport Type to init, compare with availableTransports, .auto as default
+                
                 let urlComponents = URLComponents(url: self.url, resolvingAgainstBaseURL: false)!
                 var queryItems = (urlComponents.queryItems ?? []) as [URLQueryItem]
                 queryItems.append(URLQueryItem(name: "connectionId", value: connectionId))
@@ -78,7 +87,7 @@ public class Connection: SocketConnection {
 
                 self.transport = transport ?? WebsocketsTransport()
                 self.transport!.delegate = self.transportDelegate
-
+                
                 self.transport!.start(url: self.url)
             }
             else {
