@@ -15,6 +15,7 @@ public class HubConnection {
     private var socketConnectionDelegate: HubSocketConnectionDelegate?
     private var pendingCalls = [String: ServerInvocationHandler]()
     private var callbacks = [String: ([Any?], TypeConverter) -> Void]()
+    private var handshakeHandled = false
 
     private var connection: SocketConnection!
     private var hubProtocol: HubProtocol!
@@ -47,12 +48,9 @@ public class HubConnection {
     fileprivate func connectionStarted() {
         // TODO: support custom protcols
         // TODO: add negative test (e.g. invalid protocol)
-        connection.send(data: "{ \"protocol\": \"\(hubProtocol.name)\" }\u{1e}".data(using: .utf8)!) { error in
+        connection.send(data: "\(HandshakeProtocol.createHandshakeRequest(hubProtocol: hubProtocol))".data(using: .utf8)!) { error in
             if let e = error {
                 delegate.connectionDidFailToOpen(error: e)
-            }
-            else {
-                delegate.connectionDidOpen(hubConnection: self)
             }
         }
     }
@@ -151,6 +149,17 @@ public class HubConnection {
     }
 
     fileprivate func hubConnectionDidReceiveData(data: Data) {
+        var data = data
+        if !handshakeHandled {
+            let (error, remainingData) = HandshakeProtocol.parseHandshakeResponse(data: data)
+            handshakeHandled = true
+            data = remainingData
+            if let e = error {
+                delegate.connectionDidFailToOpen(error: e)
+                return
+            }
+            delegate.connectionDidOpen(hubConnection: self)
+        }
         do {
             let messages = try hubProtocol.parseMessages(input: data)
             for incomingMessage in messages {
@@ -173,7 +182,7 @@ public class HubConnection {
         }
     }
 
-    fileprivate func handleCompletion(message: CompletionMessage) throws {
+    private func handleCompletion(message: CompletionMessage) throws {
         var serverInvocationHandler: ServerInvocationHandler?
         self.hubConnectionQueue.sync {
             serverInvocationHandler = self.pendingCalls.removeValue(forKey: message.invocationId)
