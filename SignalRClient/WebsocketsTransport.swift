@@ -8,12 +8,20 @@
 import Foundation
 // import SwiftWebSocket
 public class WebsocketsTransport: Transport {
+    
+    
     var webSocket:WebSocket? = nil
     public weak var delegate: TransportDelegate! = nil
     
     public func start(url: URL) {
-        webSocket = WebSocket(url: convertUrl(url: url))
+        start(url: url, headers: [])
+    }
+    
+    public func start(url: URL, headers: [HTTPHeader]) {
+        var urlRequest = URLRequest(url: convertUrl(url: url))
+        headers.forEach{ urlRequest.setValue($0.value, forHTTPHeaderField: $0.header) }
         
+        webSocket = WebSocket(request: urlRequest)
         webSocket!.event.open = {
             self.delegate?.transportDidOpen()
         }
