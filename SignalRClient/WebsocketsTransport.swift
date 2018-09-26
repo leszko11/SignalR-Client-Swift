@@ -5,21 +5,19 @@
 //  Created by Pawel Kadluczka on 2/23/17.
 //  Copyright © 2017 Pawel Kadluczka. All rights reserved.
 //
-
 import Foundation
 // import SwiftWebSocket
-
 public class WebsocketsTransport: Transport {
     var webSocket:WebSocket? = nil
     public weak var delegate: TransportDelegate! = nil
-
+    
     public func start(url: URL) {
         webSocket = WebSocket(url: convertUrl(url: url))
-
+        
         webSocket!.event.open = {
             self.delegate?.transportDidOpen()
         }
-
+        
         webSocket!.event.close = { code, reason, clean in
             if clean {
                 self.delegate?.transportDidClose(nil)
@@ -28,11 +26,11 @@ public class WebsocketsTransport: Transport {
                 self.delegate?.transportDidClose(nil)
             }
         }
-
+        
         webSocket!.event.error = { error in
             self.delegate!.transportDidClose(error)
         }
-
+        
         webSocket!.event.message = { message in
             if let text = message as? String {
                 self.delegate?.transportDidReceiveData(text.data(using: .utf8)!)
@@ -43,24 +41,15 @@ public class WebsocketsTransport: Transport {
         webSocket!.open()
     }
     
-    public func start(url: URL, headers: [HTTPHeader]) {
-        var urlRequest = URLRequest(url: url)
-        headers.forEach{ urlRequest.setValue($0.value, forHTTPHeaderField: $0.header) }
-
-        self.webSocket = SRWebSocket(urlRequest: urlRequest)
-        self.webSocket!.delegate = self
-        self.webSocket!.open();
-    }
-
     public func send(data: Data, sendDidComplete: (_ error: Error?) -> Void) {
         webSocket?.send(data: data)
         sendDidComplete(nil)
     }
-
+    
     public func close() {
         webSocket?.close()
     }
-
+    
     private func convertUrl(url: URL) -> URL {
         if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             if (components.scheme == "http") {
@@ -70,7 +59,7 @@ public class WebsocketsTransport: Transport {
             }
             return components.url!
         }
-
+        
         return url
     }
 }
