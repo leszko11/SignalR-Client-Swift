@@ -28,22 +28,13 @@ class TestTransportDelegate: TransportDelegate {
 }
 
 class WebsocketsTransportTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-    }
-    
-    override func tearDown() {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-        super.tearDown()
-    }
 
     func testThatWebsocketsTransportCanSendAndReceiveMessage() {
         let didOpenExpectation = expectation(description: "transport opened")
         let didReceiveDataExpectation = expectation(description: "transport received data")
         let didCloseExpectation = expectation(description: "transport closed")
 
-        let wsTransport = WebsocketsTransport()
+        let wsTransport = WebsocketsTransport(logger: NullLogger())
         let transportDelegate = TestTransportDelegate()
         let message = "Hello, World!"
 
@@ -68,7 +59,7 @@ class WebsocketsTransportTests: XCTestCase {
         }
 
         wsTransport.delegate = transportDelegate
-        wsTransport.start(url: URL(string:"http://localhost:5000/echo")!)
+        wsTransport.start(url: URL(string:"http://localhost:5000/echo")!, options: HttpConnectionOptions())
         
         waitForExpectations(timeout: 5 /*seconds*/)
     }

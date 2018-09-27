@@ -33,7 +33,7 @@ class JSONTypeConverterTests: XCTestCase {
         let doubleValue = 3.14159265
         let optionalDoubleValue: Double? = doubleValue
 
-        XCTAssertEqual(doubleValue, try jsonTypeConverter.convertToWireType(obj: doubleValue) as! Double!)
+        XCTAssertEqual(doubleValue, try jsonTypeConverter.convertToWireType(obj: doubleValue) as! Double)
 
         XCTAssertEqual(optionalDoubleValue, try jsonTypeConverter.convertToWireType(obj: optionalDoubleValue) as! Double?)
 
@@ -49,7 +49,7 @@ class JSONTypeConverterTests: XCTestCase {
         let stringValue = "Hello, World!"
         let optionalStringValue: String? = stringValue
 
-        XCTAssertEqual(stringValue, try jsonTypeConverter.convertToWireType(obj: stringValue) as! String!)
+        XCTAssertEqual(stringValue, try jsonTypeConverter.convertToWireType(obj: stringValue) as! String)
 
         XCTAssertEqual(optionalStringValue, try jsonTypeConverter.convertToWireType(obj: optionalStringValue) as! String?)
 
@@ -65,7 +65,7 @@ class JSONTypeConverterTests: XCTestCase {
         let boolValue = true
         let optionalBoolValue: Bool? = boolValue
 
-        XCTAssertEqual(boolValue, try jsonTypeConverter.convertToWireType(obj: boolValue) as! Bool!)
+        XCTAssertEqual(boolValue, try jsonTypeConverter.convertToWireType(obj: boolValue) as! Bool)
 
         XCTAssertEqual(optionalBoolValue, try jsonTypeConverter.convertToWireType(obj: optionalBoolValue) as! Bool?)
 
@@ -80,12 +80,12 @@ class JSONTypeConverterTests: XCTestCase {
     func testThatConvertToWireTypeConvertsValidJsonTypes() {
         XCTAssertNil(try jsonTypeConverter.convertToWireType(obj: nil))
 
-        let array: NSArray = [42]
-        let resultArray = try! jsonTypeConverter.convertToWireType(obj: array) as! NSArray
+        let array = [42]
+        let resultArray = try! jsonTypeConverter.convertToWireType(obj: array) as! [Int]
         XCTAssertEqual(array, resultArray)
 
-        let dictionary: NSDictionary = ["Property" : 42]
-        let resultDictionary = try! jsonTypeConverter.convertToWireType(obj: dictionary) as! NSDictionary
+        let dictionary: [String: Int] = ["Property" : 42]
+        let resultDictionary = try! jsonTypeConverter.convertToWireType(obj: dictionary) as! [String: Int]
         XCTAssertEqual(dictionary, resultDictionary)
     }
 

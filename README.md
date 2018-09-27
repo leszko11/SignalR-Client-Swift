@@ -1,37 +1,34 @@
-# SignalR-Client-Swift
+# SwiftSignalRClient
 
-Swift SignalR Client for Asp.Net Core SignalR server
+A Swift SignalR Client for the Asp.Net Core version of SignalR
 
 ## Installation
 
-- Install/Update the Carthage package manager
-- Create a new file called `Cartfile` in the application folder
-- Add the following line to the `Cartfile` to get the latest bits
-  
-  ```github "moozzyk/SignalR-Client-Swift" master``` 
-  
-- In terminal go to the application folder and run (`--platform` can be skipped to install for available platforms):
-  
-  `carthage update --platform macOS` 
-  
-- In Xcode go to the project settings and add SignalRClient and SockertRocket to "Embedded Binaries"
-- In Xcode go to the project settings and add SignalRClient and SockertRocket to "Linked Frameworks and Libraries" (if Xcode didn't do it in the previous step automatically)
-- Add 
+### Cocoapods
 
-  ```Swift
-  import SignalRClient
+- add the following lines to your `Podfile`:
+  ```ruby
+  use_frameworks!
+  pod 'SwiftSignalRClient'
   ```
-  to the file you want to use SignalR client in to import SignalR client definitions
-  
+- run:
+  ```
+  pod install
+  ```
+
+Add `#import SwiftSignalRClient` to swift files you would like to use the client in.
+
 ## Samples
 
 The repo contains samples for:
 
   - [Hubs](https://github.com/moozzyk/SignalR-Client-Swift/tree/master/HubSample)
-  - [Sockets](https://github.com/moozzyk/SignalR-Client-Swift/tree/master/SocketsSample)
+  - [HttpConnection](https://github.com/moozzyk/SignalR-Client-Swift/tree/master/ConnectionSample)
 
-The samples require a running server. To start the server go to the `TestServer` folder in terminal and run 
+The samples require a running server. To start the server go to the `TestServer` folder in terminal and run: 
 
 ```C#
 dotnet run
 ```
+
+(Requires [.NET Core SDK 2.1.300](https://www.microsoft.com/net/download/dotnet-core/sdk-2.1.300) or later)

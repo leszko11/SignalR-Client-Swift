@@ -11,12 +11,35 @@ import XCTest
 
 class HubConnectionTests: XCTestCase {
 
-    override func setUp() {
-        super.setUp()
-    }
-    
-    override func tearDown() {
-        super.tearDown()
+    func testThatOpeningHubConnectionFailsIfHandshakeFails() {
+        let didFailToOpenExpectation = expectation(description: "connection failed to open")
+        let didCloseExpectation = expectation(description: "connection closed")
+
+        let hubConnectionDelegate = TestHubConnectionDelegate()
+        hubConnectionDelegate.connectionDidOpenHandler = { _ in XCTFail() }
+        hubConnectionDelegate.connectionDidFailToOpenHandler = { error in
+            didFailToOpenExpectation.fulfill()
+            switch (error as? SignalRError) {
+            case .handshakeError(let errorMessage)?:
+                XCTAssertEqual("The protocol 'fakeProtocol' is not supported.", errorMessage)
+                break
+            default:
+                XCTFail()
+                break
+            }
+        }
+        hubConnectionDelegate.connectionDidCloseHandler = { error in
+            didCloseExpectation.fulfill()
+            XCTAssertNil(error)
+        }
+
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withHubProtocol(hubProtocolFactory: {_ in HubProtocolFake()})
+            .build()
+        hubConnection.delegate = hubConnectionDelegate
+        hubConnection.start()
+
+        waitForExpectations(timeout: 500 /*seconds*/)
     }
 
     func testThatHubMethodCanBeInvoked() {
@@ -42,7 +65,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -70,7 +93,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -91,7 +114,7 @@ class HubConnectionTests: XCTestCase {
 
                 switch (error as! SignalRError) {
                 case .hubInvocationError(let errorMessage):
-                    XCTAssertEqual("Error occurred.", errorMessage)
+                    XCTAssertEqual("An unexpected error occurred invoking 'ErrorMethod' on the server. InvalidOperationException: Error occurred.", errorMessage)
                     break
                 default:
                     XCTFail()
@@ -108,7 +131,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -118,8 +141,8 @@ class HubConnectionTests: XCTestCase {
     func testThatPendingInvocationsAreCancelledWhenConnectionIsClosed() {
         let invocationCancelledExpectation = expectation(description: "invocation cancelled")
 
-        let testSocketConnection = TestSocketConnection()
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let testConnection = TestConnection()
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -144,8 +167,8 @@ class HubConnectionTests: XCTestCase {
         let invocationCancelledExpectation = expectation(description: "invocation cancelled")
         let testError = SignalRError.invalidOperation(message: "testError")
 
-        let testSocketConnection = TestSocketConnection()
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let testConnection = TestConnection()
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -160,7 +183,7 @@ class HubConnectionTests: XCTestCase {
             }
             invocationCancelledExpectation.fulfill()
         })
-        testSocketConnection.delegate?.connectionDidClose(error: testError)
+        testConnection.delegate?.connectionDidClose(error: testError)
 
         waitForExpectations(timeout: 5 /*seconds*/)
     }
@@ -188,7 +211,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -210,7 +233,7 @@ class HubConnectionTests: XCTestCase {
 
                 switch (error as! SignalRError) {
                 case .hubInvocationError(let errorMessage):
-                    XCTAssertEqual("Error occurred while streaming.", errorMessage)
+                    XCTAssertEqual("An error occurred on the server while streaming results. InvalidOperationException: Error occurred while streaming.", errorMessage)
                     break
                 default:
                     XCTFail()
@@ -230,7 +253,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -266,7 +289,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
@@ -276,8 +299,8 @@ class HubConnectionTests: XCTestCase {
     func testThatPendingStreamInvocationsAreCancelledWhenConnectionIsClosed() {
         let invocationCancelledExpectation = expectation(description: "invocation cancelled")
 
-        let testSocketConnection = TestSocketConnection()
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let testConnection = TestConnection()
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -302,8 +325,8 @@ class HubConnectionTests: XCTestCase {
         let invocationCancelledExpectation = expectation(description: "invocation cancelled")
         let testError = SignalRError.invalidOperation(message: "testError")
 
-        let testSocketConnection = TestSocketConnection()
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let testConnection = TestConnection()
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -318,7 +341,7 @@ class HubConnectionTests: XCTestCase {
             }
             invocationCancelledExpectation.fulfill()
         })
-        testSocketConnection.delegate?.connectionDidClose(error: testError)
+        testConnection.delegate?.connectionDidClose(error: testError)
 
         waitForExpectations(timeout: 5 /*seconds*/)
     }
@@ -327,7 +350,7 @@ class HubConnectionTests: XCTestCase {
         let didOpenExpectation = expectation(description: "connection opened")
         let didCloseExpectation = expectation(description: "connection closed")
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         var lastItem = -1
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnectionDelegate.connectionDidOpenHandler = { hubConnection in
@@ -360,13 +383,13 @@ class HubConnectionTests: XCTestCase {
     func testThatCancellingStreamingInvocationSendsCancelStreamMessage() {
         var messages: [Data] = []
 
-        let testSocketConnection = TestSocketConnection()
-        testSocketConnection.sendDelegate = { data, sendDidComplete in
+        let testConnection = TestConnection()
+        testConnection.sendDelegate = { data, sendDidComplete in
             messages.append(data)
             sendDidComplete(nil)
         }
 
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -385,13 +408,13 @@ class HubConnectionTests: XCTestCase {
     func testThatCallbackInvokedIfSendingCancellationMessageFailed() {
         let cancelDidFailExpectation = expectation(description: "cancelDidFail invoked")
 
-        let testSocketConnection = TestSocketConnection()
-        testSocketConnection.sendDelegate = { data, sendDidComplete in
+        let testConnection = TestConnection()
+        testConnection.sendDelegate = { data, sendDidComplete in
             let msg = String(data: data, encoding: .utf8)!
             sendDidComplete(msg.contains("\"type\":5") ? SignalRError.invalidOperation(message: "test") : nil)
         }
 
-        let hubConnection = HubConnection(connection: testSocketConnection, hubProtocol: JSONHubProtocol())
+        let hubConnection = HubConnection(connection: testConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
         let hubConnectionDelegate = TestHubConnectionDelegate()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
@@ -435,8 +458,51 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withLogging(minLogLevel: .debug)
+            .build()
         hubConnection.delegate = hubConnectionDelegate
+        hubConnection.on(method: "GetNumber", callback: { args, _ in
+            XCTAssertNotNil(args)
+            XCTAssertEqual(1, args.count)
+            XCTAssertEqual(42, args[0] as! Int)
+            didInvokeClientMethod.fulfill()
+            hubConnection.stop()
+        })
+
+        hubConnection.start()
+
+        waitForExpectations(timeout: 5 /*seconds*/)
+    }
+
+    func testThatClientMethodsCanBeOverwritten() {
+        let didOpenExpectation = expectation(description: "connection opened")
+        let didReceiveInvocationResult = expectation(description: "received invocation result")
+        let didInvokeClientMethod = expectation(description: "client method invoked")
+        let didCloseExpectation = expectation(description: "connection closed")
+
+        let hubConnectionDelegate = TestHubConnectionDelegate()
+        hubConnectionDelegate.connectionDidOpenHandler = { hubConnection in
+            didOpenExpectation.fulfill()
+
+            hubConnection.invoke(method: "InvokeGetNumber", arguments: [42], invocationDidComplete: { error in
+                XCTAssertNil(error)
+                didReceiveInvocationResult.fulfill()
+            })
+        }
+
+        hubConnectionDelegate.connectionDidCloseHandler = { error in
+            XCTAssertNil(error)
+            didCloseExpectation.fulfill()
+        }
+
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
+        hubConnection.delegate = hubConnectionDelegate
+
+        hubConnection.on(method: "GetNumber", callback: { args, _ in
+            XCTFail("Should not be invoked")
+        })
+
         hubConnection.on(method: "GetNumber", callback: { args, _ in
             XCTAssertNotNil(args)
             XCTAssertEqual(1, args.count)
@@ -472,8 +538,10 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubProtocol = JSONHubProtocol(typeConverter: PersonTypeConverter())
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!, hubProtocol: hubProtocol)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withJSONHubProtocol(typeConverter: PersonTypeConverter())
+            .build()
+
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.on(method: "GetPerson", callback: { arguments, typeConverter in
             XCTAssertNotNil(arguments)
@@ -513,7 +581,7 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!).build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.on(method: "GetNumber", callback: { args, _ in
             XCTAssertNotNil(args)
@@ -563,7 +631,6 @@ class HubConnectionTests: XCTestCase {
         }
 
         private func convertUser(user: User?) -> [String: Any?]? {
-
             if let u = user {
                 return [
                     "firstName": u.firstName,
@@ -577,7 +644,6 @@ class HubConnectionTests: XCTestCase {
         }
 
         override func convertFromWireType<T>(obj: Any?, targetType: T.Type) throws -> T? {
-
             if let userDictionary = obj as? [String: Any?]? {
                 return materializeUser(userDictionary: userDictionary) as? T
             }
@@ -597,15 +663,12 @@ class HubConnectionTests: XCTestCase {
         private func materializeUser(userDictionary: [String: Any?]?) -> User? {
             if let user = userDictionary {
                 return User(firstName: user["firstName"] as! String, lastName: user["lastName"] as! String, age: user["age"] as! Int?, height: user["height"] as! Double?, sex: user["sex"] as! Int == 0 ? Sex.Male : Sex.Female)
-
             }
-
             return nil
         }
     }
 
     func testThatHubMethodUsingComplexTypesCanBeInvoked() {
-
         let didOpenExpectation = expectation(description: "connection opened")
         let didReceiveInvocationResult = expectation(description: "received invocation result")
         let didCloseExpectation = expectation(description: "connection closed")
@@ -644,13 +707,106 @@ class HubConnectionTests: XCTestCase {
             didCloseExpectation.fulfill()
         }
 
-
-        let hubProtocol = JSONHubProtocol(typeConverter: PersonTypeConverter())
-        let hubConnection = HubConnection(url: URL(string: "http://localhost:5000/testhub")!, hubProtocol: hubProtocol)
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withJSONHubProtocol(typeConverter: PersonTypeConverter())
+            .build()
         hubConnection.delegate = hubConnectionDelegate
         hubConnection.start()
 
         waitForExpectations(timeout: 5 /*seconds*/)
+    }
+
+    func testThatHubConnectionSendsHeaders() {
+        let hubConnectionDelegate = TestHubConnectionDelegate()
+        hubConnectionDelegate.connectionDidOpenHandler = { hubConnection in
+            hubConnection.invoke(method: "GetHeader", arguments: ["TestHeader"], returnType: String.self, invocationDidComplete: { result, error in
+                XCTAssertNil(error)
+                XCTAssertEqual("header", result)
+                hubConnection.stop()
+            })
+        }
+
+        let didCloseExpectation = expectation(description: "connection closed")
+        hubConnectionDelegate.connectionDidCloseHandler = { error in
+            XCTAssertNil(error)
+            didCloseExpectation.fulfill()
+        }
+
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withHttpConnectionOptions() { httpConnectionOptions in
+                httpConnectionOptions.headers["TestHeader"] = "header"
+            }
+            .build()
+
+        hubConnection.delegate = hubConnectionDelegate
+        hubConnection.start()
+
+        waitForExpectations(timeout: 5 /*seconds*/)
+    }
+
+    func testThatHubConnectionSendsAuthToken() {
+        let hubConnectionDelegate = TestHubConnectionDelegate()
+        hubConnectionDelegate.connectionDidOpenHandler = { hubConnection in
+            hubConnection.invoke(method: "GetHeader", arguments: ["Authorization"], returnType: String.self, invocationDidComplete: { result, error in
+                XCTAssertNil(error)
+                XCTAssertEqual("Bearer abc", result)
+                hubConnection.stop()
+            })
+        }
+
+        let didCloseExpectation = expectation(description: "connection closed")
+        hubConnectionDelegate.connectionDidCloseHandler = { error in
+            XCTAssertNil(error)
+            didCloseExpectation.fulfill()
+        }
+
+        let hubConnection = HubConnectionBuilder(url: URL(string: "http://localhost:5000/testhub")!)
+            .withHttpConnectionOptions() { httpConnectionOptions in
+                httpConnectionOptions.accessTokenProvider = { return "abc" }
+            }
+            .build()
+
+        hubConnection.delegate = hubConnectionDelegate
+        hubConnection.start()
+
+        waitForExpectations(timeout: 5 /*seconds*/)
+    }
+
+    func testThatStopDoesNotPassStopErrorToUnderlyingConnection() {
+        class FakeHttpConnection: HttpConnection {
+            var stopCalled: Bool = false
+
+            override func stop(stopError: Error?) {
+                XCTAssertNil(stopError)
+                stopCalled = true
+            }
+        }
+
+        let fakeConnection = FakeHttpConnection(url: URL(string: "http://fakeuri.org")!)
+        let hubConnection = HubConnection(connection: fakeConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
+        hubConnection.stop()
+        XCTAssertTrue(fakeConnection.stopCalled)
+    }
+
+    func testThatHubConnectionClosesConnectionUponReceivingCloseMessage() {
+        class FakeHttpConnection: HttpConnection {
+            var stopError: Error?
+
+            override func start() {
+                delegate?.connectionDidOpen(connection: self)
+            }
+
+            override func stop(stopError: Error?) {
+                self.stopError = stopError
+            }
+        }
+
+        let fakeConnection = FakeHttpConnection(url: URL(string: "http://fakeuri.org")!)
+        let hubConnection = HubConnection(connection: fakeConnection, hubProtocol: JSONHubProtocol(logger: NullLogger()))
+        hubConnection.start()
+        let payload = "{}\u{1e}{ \"type\": 7, \"error\": \"Server Error\" }\u{1e}"
+        fakeConnection.delegate.connectionDidReceiveData(connection: fakeConnection, data: payload.data(using: .utf8)!)
+        XCTAssertEqual(String(describing: SignalRError.serverClose(message: "Server Error")), String(describing: fakeConnection.stopError!))
     }
 }
 
@@ -672,10 +828,11 @@ class TestHubConnectionDelegate: HubConnectionDelegate {
     }
 }
 
-class TestSocketConnection: SocketConnection {
-    var delegate: SocketConnectionDelegate!
+class TestConnection: Connection {
+    var delegate: ConnectionDelegate!
     var sendDelegate: ((_ data: Data, _ sendDidComplete: (_ error: Error?) -> Void) -> Void)?
-    func start(transport: Transport? = nil) -> Void {
+
+    func start() {
         delegate?.connectionDidOpen(connection: self)
     }
 
@@ -683,7 +840,7 @@ class TestSocketConnection: SocketConnection {
         sendDelegate?(data, sendDidComplete)
     }
 
-    func stop() -> Void {
-        delegate?.connectionDidClose(error: nil)
+    func stop(stopError: Error? = nil) -> Void {
+        delegate?.connectionDidClose(error: stopError)
     }
 }

@@ -8,7 +8,9 @@
 
 import Foundation
 
-public class JSONTypeConverter: TypeConverter {
+open class JSONTypeConverter: TypeConverter {
+    public init() {}
+
     public func convertToWireType(obj: Any?) throws -> Any? {
         if isKnownType(obj: obj) || JSONSerialization.isValidJSONObject(obj!) {
             return obj
@@ -39,39 +41,39 @@ public class JSONTypeConverter: TypeConverter {
 }
 
 public class JSONHubProtocol: HubProtocol {
-    private let recordSeparator = "\u{1e}"
+    private static let recordSeparator = UInt8(0x1e)
+    private let logger: Logger
     public let typeConverter: TypeConverter
     public let name = "json"
+    public let version = 1
     public let type = ProtocolType.Text
 
-    public convenience init() {
-        self.init(typeConverter: JSONTypeConverter())
-    }
 
-    public init(typeConverter: TypeConverter) {
+    public init(typeConverter: TypeConverter = JSONTypeConverter(), logger: Logger) {
         self.typeConverter = typeConverter
+        self.logger = logger
     }
 
     public func parseMessages(input: Data) throws -> [HubMessage] {
-        let dataString = String(data: input, encoding: .utf8)!
-
-        var hubMessages = [HubMessage]()
-
-        if let range = dataString.range(of: recordSeparator, options: .backwards) {
-            let messages = dataString[..<range.lowerBound].components(separatedBy: recordSeparator)
-            for message in messages {
-                hubMessages.append(try createHubMessage(payload: message))
-            }
+        let payloads = input.split(separator: JSONHubProtocol.recordSeparator)
+        // do not try to parse the last payload if it is not terminated with record sparator
+        var count = payloads.count
+        if count > 0 && input.last != JSONHubProtocol.recordSeparator {
+            logger.log(logLevel: .warning, message: "Partial message received. Here be dragons...")
+            count = count - 1
         }
 
-        return hubMessages
+        logger.log(logLevel: .debug, message: "Payload contains \(count) message(s)")
+
+        return try payloads[0..<count].map{ try createHubMessage(payload: $0) }
     }
 
-    private func createHubMessage(payload: String) throws -> HubMessage {
-        // TODO: try to avoid double conversion (Data -> String -> Data)
-        let json = try JSONSerialization.jsonObject(with: payload.data(using: .utf8)!)
+    private func createHubMessage(payload: Data) throws -> HubMessage {
+        logger.log(logLevel: .debug, message: "Message received: \(String(data:payload, encoding: .utf8) ?? "(empty)")")
 
-        if let message = json as? NSDictionary, let rawMessageType = message.object(forKey: "type") as? Int, let messageType = MessageType(rawValue: rawMessageType) {
+        let json = try JSONSerialization.jsonObject(with: payload)
+
+        if let message = json as? [String: Any], let rawMessageType = message["type"] as? Int, let messageType = MessageType(rawValue: rawMessageType) {
             switch messageType {
             case .Invocation:
                 return try createInvocationMessage(message: message)
@@ -80,55 +82,62 @@ public class JSONHubProtocol: HubProtocol {
             case .Completion:
                 return try createCompletionMessage(message: message)
             case .Ping:
-                return PingMessage.instance;
+                return PingMessage.instance
+            case .Close:
+                return createCloseMessage(message: message)
             default:
-                print("Unsupported messageType: \(messageType)")
+                logger.log(logLevel: .error, message: "Unsupported messageType: \(messageType)")
             }
         }
 
         throw SignalRError.unknownMessageType
     }
 
-    private func createInvocationMessage(message: NSDictionary) throws -> InvocationMessage {
+    private func createInvocationMessage(message: [String: Any]) throws -> InvocationMessage {
         // client side invocations are never blocking so the server never sends invocationId
-        guard let target = message.value(forKey: "target") as? String else {
+        guard let target = message["target"] as? String else {
             throw SignalRError.invalidMessage
         }
 
-        let arguments = message.object(forKey: "arguments") as? NSArray
-        return InvocationMessage(target: target, arguments: arguments as? [Any?] ?? [])
+        let arguments = message["arguments"] as? [Any]
+        return InvocationMessage(target: target, arguments: arguments ?? [])
     }
 
-    private func createStreamItemMessage(message: NSDictionary) throws -> StreamItemMessage {
+    private func createStreamItemMessage(message: [String: Any]) throws -> StreamItemMessage {
         let invocationId = try getInvocationId(message: message)
-        return StreamItemMessage(invocationId: invocationId, item: message.value(forKey: "item"))
+        return StreamItemMessage(invocationId: invocationId, item: message["item"] as Any)
     }
 
-    private func createCompletionMessage(message: NSDictionary) throws -> CompletionMessage {
+    private func createCompletionMessage(message: [String: Any]) throws -> CompletionMessage {
         let invocationId = try getInvocationId(message: message)
-        if let error = message.value(forKey: "error") as? String {
+        if let error = message["error"] as? String {
             return CompletionMessage(invocationId: invocationId, error: error)
         }
 
-        if let result = message.value(forKey: "result") {
+        if let result = message["result"] {
             return CompletionMessage(invocationId: invocationId, result: result is NSNull ? nil : result)
         }
 
         return CompletionMessage(invocationId: invocationId)
     }
 
-    private func getInvocationId(message: NSDictionary) throws -> String {
-        guard let invocationId = message.value(forKey: "invocationId") as? String else {
+    private func getInvocationId(message: [String: Any]) throws -> String {
+        guard let invocationId = message["invocationId"] as? String else {
             throw SignalRError.invalidMessage
         }
 
         return invocationId
     }
 
+    private func createCloseMessage(message: [String: Any]) -> CloseMessage {
+        let error = message["error"] as? String
+        return CloseMessage(error: error)
+    }
+
     public func writeMessage(message: HubMessage) throws -> Data {
         let invocationJSONObject = try createMessageJSONObject(message: message)
         var payload = try JSONSerialization.data(withJSONObject: invocationJSONObject)
-        payload.append(recordSeparator.data(using: .utf8)!)
+        payload.append(JSONHubProtocol.recordSeparator)
         return payload
     }
 
@@ -163,9 +172,7 @@ public class JSONHubProtocol: HubProtocol {
             "type": streamInvocationMessage.messageType.rawValue,
             "invocationId": streamInvocationMessage.invocationId,
             "target": streamInvocationMessage.target,
-            "arguments": try streamInvocationMessage.arguments.map{ arg -> Any? in
-                return try typeConverter.convertToWireType(obj: arg)
-            }]
+            "arguments": try streamInvocationMessage.arguments.map{try typeConverter.convertToWireType(obj: $0)}]
     }
 
     private func createCancelInvocationMessageJSONObject(cancelInvocationMessage: CancelInvocationMessage) -> [String: Any] {
